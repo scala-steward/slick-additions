@@ -1,76 +1,83 @@
 package scala.slick
 package additions
 
-import lifted.{ BaseTypeMapper, MappedTypeMapper }
+import driver._
+
 import jdbc.GetResult
 
 
-trait Bitmaskable[A] {
-  def bitmasked: A => Bitmasked
-}
+trait EnumsComponent extends JdbcDriver {
 
-trait Bitmasked {
-  type Value
+  trait Bitmaskable[A] {
+    def bitmasked: A => Bitmasked
+  }
 
-  def bitFor: Value => Int
+  trait Bitmasked {
+    type Value
 
-  def forBit: Int => Value
+    def bitFor: Value => Int
 
-  def values: Iterable[Value]
+    def forBit: Int => Value
 
-  def longToSet: Long => Set[Value] = bm => values.toSeq.filter(v => 0 != (bm & (1 << bitFor(v)))).toSet
+    def values: Iterable[Value]
 
-  def setToLong: Set[Value] => Long = _.foldLeft(0L){ (bm, v) => bm + (1L << bitFor(v)) }
+    def longToSet: Long => Set[Value] = bm => values.toSeq.filter(v => 0 != (bm & (1 << bitFor(v)))).toSet
 
-  implicit lazy val enumTypeMapper: BaseTypeMapper[Value] =
-    MappedTypeMapper.base[Value, Int](bitFor, forBit)
-  implicit lazy val enumSetTypeMapper: BaseTypeMapper[Set[Value]] =
-   MappedTypeMapper.base[Set[Value], Long](setToLong, longToSet)
+    def setToLong: Set[Value] => Long = _.foldLeft(0L){ (bm, v) => bm + (1L << bitFor(v)) }
 
-  implicit lazy val getResult: GetResult[Value] = GetResult(r => forBit(r.nextInt))
-  implicit lazy val getSetResult: GetResult[Set[Value]] = GetResult(r => longToSet(r.nextLong))
-}
+    import simple._
 
-object Bitmaskable {
-  implicit def enumeration[E <: Enumeration]: Bitmaskable[E] = new Bitmaskable[E] {
-    def bitmasked = e => new Bitmasked {
-      type Value = E#Value
-      def bitFor = _.id
-      def forBit = e apply _
-      def values = e.values.toSeq
+    implicit lazy val enumTypeMapper: simple.ColumnType[Value] with ast.BaseTypedType[Value] =
+      simple.MappedColumnType.base[Value, Int](bitFor, forBit)
+    implicit lazy val enumSetTypeMapper: simple.ColumnType[Set[Value]] with ast.BaseTypedType[Set[Value]] =
+      simple.MappedColumnType.base[Set[Value], Long](setToLong, longToSet)
+
+    implicit lazy val getResult: GetResult[Value] = GetResult(r => forBit(r.nextInt))
+    implicit lazy val getSetResult: GetResult[Set[Value]] = GetResult(r => longToSet(r.nextLong))
+  }
+
+  object Bitmaskable {
+    implicit def enumeration[E <: Enumeration]: Bitmaskable[E] = new Bitmaskable[E] {
+      def bitmasked = e => new Bitmasked {
+        type Value = E#Value
+        def bitFor = _.id
+        def forBit = e apply _
+        def values = e.values.toSeq
+      }
+    }
+    implicit def enum[E <: Enum]: Bitmaskable[E] = new Bitmaskable[E] {
+      def bitmasked = e => e
     }
   }
-  implicit def enum[E <: Enum]: Bitmaskable[E] = new Bitmaskable[E] {
-    def bitmasked = e => e
+
+  /**
+   * Mix this in to a subclass of `Enumeration`
+   * to get an implicit `BaseTypeMapper` and `GetResult`
+   * for `V` and `Set[V]`.
+   */
+  trait BitmaskedEnumeration extends Bitmasked { this: Enumeration =>
+    def bitFor = _.id
+    def forBit = apply(_)
   }
-}
 
-/**
- * Mix this in to a subclass of `Enumeration`
- * to get an implicit `BaseTypeMapper` and `GetResult`
- * for `V` and `Set[V]`.
- */
-trait BitmaskedEnumeration extends Bitmasked { this: Enumeration =>
-  def bitFor = _.id
-  def forBit = apply(_)
-}
+  /**
+   * An alternative to `Enumeration`, including an implicit `BaseTypeMapper` and `GetResult`
+   * for `Value` and `Set[Value]`.
+   */
+  trait Enum extends Bitmasked {
+    type Value <: ValueBase
+    trait ValueBase { this: Value =>
+      /**
+       * Convenience upcast
+       */
+      val value: Value = this
+    }
+    val values: Seq[Value]
 
-/**
- * An alternative to `Enumeration`, including an implicit `BaseTypeMapper` and `GetResult`
- * for `Value` and `Set[Value]`.
- */
-trait Enum extends Bitmasked {
-  type Value <: ValueBase
-  trait ValueBase { this: Value =>
-    /**
-     * Convenience upcast
-     */
-    val value: Value = this
+    def bitFor: Value => Int = values.indexOf(_)
+
+    def forBit = values(_)
+
   }
-  val values: Seq[Value]
-
-  def bitFor: Value => Int = values.indexOf(_)
-
-  def forBit = values(_)
 
 }

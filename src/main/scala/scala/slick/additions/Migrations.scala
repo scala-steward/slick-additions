@@ -4,9 +4,10 @@ package additions
 import lifted._
 import driver._
 import ast._
-import session.Session
 
-trait Migrations extends BasicSQLUtilsComponent with BasicStatementBuilderComponent { driver: BasicDriver =>
+trait Migrations extends JdbcStatementBuilderComponent { driver: JdbcDriver =>
+  import simple.Session
+
   protected def fieldSym(node: Node): Option[FieldSymbol] = node match {
     case Select(_, f: FieldSymbol) => Some(f)
     case _                         => None
@@ -42,7 +43,7 @@ trait Migrations extends BasicSQLUtilsComponent with BasicStatementBuilderCompon
   }
   class ColumnOptions(column: FieldSymbol) {
     import ColumnOption._
-    val tmDelegate = column.typeMapper(driver)
+    val tmDelegate = typeInfoFor(column.tpe)
     val (sqlType, notNull, autoInc, pk, dflt) =
       column.options.foldLeft((tmDelegate.sqlTypeName, !tmDelegate.nullable, false, false, Option.empty[String])){
         case (t, DBType(s))  => t.copy(_1 = s)
@@ -51,7 +52,7 @@ trait Migrations extends BasicSQLUtilsComponent with BasicStatementBuilderCompon
         case (t, AutoInc)    => t.copy(_3 = true)
         case (t, PrimaryKey) => t.copy(_4 = true)
         case (t, Default(v)) =>
-          val lit = column.typeMapper(driver).asInstanceOf[TypeMapperDelegate[Any]].valueToSQLLiteral(v)
+          val lit = typeInfoFor(column.tpe).valueToSQLLiteral(v)
           t.copy(_5 = Some(lit))
         case (t, _)          => t
       }

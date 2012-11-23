@@ -3,6 +3,8 @@ package additions
 
 import lifted._
 import driver._
+import profile._
+
 import scala.reflect.runtime.currentMirror
 
 sealed trait Entity[K, +A] {
@@ -34,8 +36,8 @@ case class ModifiedEntity[K, +A](key: K, value: A) extends KeyedEntity[K, A] {
 }
 
 
-trait KeyedTableComponent extends BasicDriver {
-  abstract class KeyedTable[K : BaseTypeMapper, A](tableName: String) extends Table[A](tableName) { keyedTable =>
+trait KeyedTableComponent extends JdbcDriver {
+  abstract class KeyedTable[K, A](tableName: String)(implicit m: ast.BaseTypedType[K] with simple.ColumnType[K]) extends Table[A](tableName) { keyedTable =>
     def keyColumnName = "id"
     def keyColumnOptions = List(O.PrimaryKey, O.NotNull, O.AutoInc)
     def key = column[K](keyColumnName, keyColumnOptions: _*)
@@ -59,7 +61,7 @@ trait KeyedTableComponent extends BasicDriver {
       import simple._
 
       def query: Query[TB, B] = for {
-        t <- KeyedTable.this if thisLookup map (t.key is _.key) getOrElse ConstColumn.TRUE
+        t <- KeyedTable.this if thisLookup map (t.key is _.key) getOrElse ConstColumn(true)
         o <- otherTable if column(o) is lookup
       } yield o
 
@@ -94,11 +96,11 @@ trait KeyedTableComponent extends BasicDriver {
       _cached = Option(initial)
     }
 
-    implicit def lookupMapper: BaseTypeMapper[Lookup] =
-      MappedTypeMapper.base[Lookup, K](_.key, Lookup(_))
+    implicit def lookupMapper: simple.ColumnType[Lookup] with ast.BaseTypedType[Lookup] =
+      simple.MappedColumnType.base[Lookup, K](_.key, Lookup(_))
   }
 
-  abstract class EntityTable[K : BaseTypeMapper, A](tableName: String) extends KeyedTable[K, KeyedEntity[K, A]](tableName) {
+  abstract class EntityTable[K, A](tableName: String)(implicit m: ast.BaseTypedType[K] with simple.ColumnType[K]) extends KeyedTable[K, KeyedEntity[K, A]](tableName) {
     type Value = A
     type Ent   = Entity[K, A]
     type KEnt  = KeyedEntity[K, A]
@@ -203,11 +205,11 @@ trait KeyedTableComponent extends BasicDriver {
 }
 
 trait NamingDriver extends KeyedTableComponent {
-  abstract class KeyedTable[K, A](tableName: String)(implicit btm: BaseTypeMapper[K]) extends super.KeyedTable[K, A](tableName) {
-    def this()(implicit btm: BaseTypeMapper[K]) =
-     this(currentMirror.classSymbol(Class.forName(Thread.currentThread.getStackTrace()(2).getClassName)).name.decoded)(btm)
+  abstract class KeyedTable[K, A](tableName: String)(implicit m: ast.BaseTypedType[K] with simple.ColumnType[K]) extends super.KeyedTable[K, A](tableName) {
+    def this()(implicit m: ast.BaseTypedType[K] with simple.ColumnType[K]) =
+     this(currentMirror.classSymbol(Class.forName(Thread.currentThread.getStackTrace()(2).getClassName)).name.decoded)(m)
 
-    def column[C](options: ColumnOption[C]*)(implicit tm: TypeMapper[C]): Column[C] =
+    def column[C](options: ast.ColumnOption[C]*)(implicit tm: ast.TypedType[C]): Column[C] =
       column[C](scala.reflect.NameTransformer.decode(Thread.currentThread.getStackTrace()(2).getMethodName), options: _*)
   }
   trait SimpleQL extends super.SimpleQL {
