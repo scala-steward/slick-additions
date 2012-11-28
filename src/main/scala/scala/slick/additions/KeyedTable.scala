@@ -93,16 +93,19 @@ trait KeyedTableComponent extends JdbcDriver {
     def OneToManyEnt[K, A, TB <: simple.EntityTable[K, A]](
       otherTable: TB with simple.EntityTable[K, A], lookup: Option[Lookup]
     )(
-      column: TB => Column[Lookup], setLookup: Lookup => A => A, initial: Seq[Entity[K, A]] = null
-    ) = new OneToMany[Entity[K, A], KeyedEntity[K, A], TB](otherTable, lookup)(column, l => _.map(setLookup(l))) {
+      column: TB => Column[Lookup], setLookup: Lookup => A => A, initial: Seq[TB#Ent] = null
+    ) = new OneToMany[TB#Ent, TB#KEnt, TB](otherTable, lookup)(column, l => _.map(setLookup(l))) {
       _cached = Option(initial)
     }
+
+    type OneToManyEnt[K, A, TB <: simple.EntityTable[K, A]] = OneToMany[TB#Ent, TB#KEnt, TB]
 
     implicit def lookupMapper: simple.ColumnType[Lookup] with ast.BaseTypedType[Lookup] =
       simple.MappedColumnType.base[Lookup, K](_.key, Lookup(_))
   }
 
   abstract class EntityTable[K, A](tableName: String)(implicit m: ast.BaseTypedType[K] with simple.ColumnType[K]) extends KeyedTable[K, KeyedEntity[K, A]](tableName) {
+    type Key = K
     type Value = A
     type Ent   = Entity[K, A]
     type KEnt  = KeyedEntity[K, A]
