@@ -54,7 +54,7 @@ trait KeyedTableComponent extends JdbcDriver {
 
 
     class OneToMany[E >: B, B, TB <: simple.Table[B]](
-      otherTable: TB with simple.Table[B], thisLookup: =>Option[Lookup]
+      otherTable: TB with simple.Table[B], thisLookup: Option[Lookup]
     )(
       column: TB => Column[Lookup], setLookup: Lookup => E => E
     ) extends additions.SeqLookup[E, simple.Session] with DiffSeq[E, OneToMany[E, B, TB]] {
