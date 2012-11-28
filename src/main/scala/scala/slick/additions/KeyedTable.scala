@@ -62,7 +62,7 @@ trait KeyedTableComponent extends JdbcDriver {
 
       def query: Query[TB, B] =
         Query(KeyedTable.this)
-          .filter(t => thisLookup map (t.key is _.key) getOrElse ConstColumn(true))
+          .filter(t => thisLookup map (t.key is _.key) getOrElse ConstColumn(false))
           .flatMap{ t =>
             Query(otherTable).filter(column(_) is t.asInstanceOf[KeyedTable.this.type].lookup)
           }
