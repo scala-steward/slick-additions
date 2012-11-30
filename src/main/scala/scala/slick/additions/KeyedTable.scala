@@ -71,7 +71,7 @@ trait KeyedTableComponent extends JdbcDriver {
       def withLookup(lookup: Lookup) = if(isCopy) this map setLookup(lookup) else {
         val f = setLookup(lookup)
         new OneToMany[E, B, TB](otherTable, Some(lookup))(column, setLookup) {
-          _cached = OneToMany.this.cached
+          cached = OneToMany.this.cached
           override def currentItems = super.currentItems map (_ map f)
         }
       }
@@ -95,7 +95,7 @@ trait KeyedTableComponent extends JdbcDriver {
     )(
       column: TB => Column[Lookup], setLookup: Lookup => B => B, initial: Seq[B] = null
     ) = new OneToMany[B, B, TB](otherTable, lookup)(column, setLookup) {
-      _cached = Option(initial)
+      cached = Option(initial)
     }
 
     def OneToManyEnt[K, A, TB <: simple.EntityTable[K, A]](
@@ -103,7 +103,7 @@ trait KeyedTableComponent extends JdbcDriver {
     )(
       column: TB => Column[Lookup], setLookup: Lookup => A => A, initial: Seq[TB#Ent] = null
     ) = new OneToMany[TB#Ent, TB#KEnt, TB](otherTable, lookup)(column, l => _.map(setLookup(l))) {
-      _cached = Option(initial)
+      cached = Option(initial)
     }
 
     type OneToManyEnt[K, A, TB <: simple.EntityTable[K, A]] = OneToMany[TB#Ent, TB#KEnt, TB]
