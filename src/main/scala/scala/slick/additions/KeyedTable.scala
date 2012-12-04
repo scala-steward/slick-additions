@@ -152,7 +152,7 @@ trait KeyedTableComponent extends JdbcDriver {
     }
     def update(ke: KEnt)(implicit session: simple.Session): SavedEntity[K, A] = {
       import simple._
-      Query(*) update ke
+      Query(this).where(_.key is ke.key).map(_.forInsert) update ke.value
       SavedEntity(ke.key, ke.value)
     }
     def save(e: Entity[K, A])(implicit session: simple.Session): SavedEntity[K, A] = {
