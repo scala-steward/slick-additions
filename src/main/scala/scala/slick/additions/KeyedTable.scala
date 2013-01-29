@@ -60,11 +60,9 @@ trait KeyedTableComponent extends BasicDriver {
 
     class OneToMany[E >: B, B, TB <: simple.Table[B]](
       private[KeyedTable] val otherTable: TB with simple.Table[B],
-      private[KeyedTable] val thisLookup: Option[Lookup]
-    )(
-      private[KeyedTable] val column: TB => Column[Lookup],
-      private[KeyedTable] val setLookup: Lookup => E => E
-    ) extends additions.SeqLookup[E, simple.Session] with DiffSeq[E, OneToMany[E, B, TB]] {
+      private[KeyedTable] val thisLookup: Option[Lookup])(
+        private[KeyedTable] val column: TB => Column[Lookup],
+        private[KeyedTable] val setLookup: Lookup => E => E) extends additions.SeqLookup[E, simple.Session] with DiffSeq[E, OneToMany[E, B, TB]] {
 
       protected val isCopy = false
 
@@ -75,7 +73,7 @@ trait KeyedTableComponent extends BasicDriver {
         override val isCopy = true
       }
 
-      def withLookup(lookup: Lookup) = if(isCopy) this map setLookup(lookup) else {
+      def withLookup(lookup: Lookup) = if (isCopy) this map setLookup(lookup) else {
         val f = setLookup(lookup)
         new OneToMany[E, B, TB](otherTable, Some(lookup))(column, setLookup) {
           cached = OneToMany.this.cached
@@ -96,10 +94,8 @@ trait KeyedTableComponent extends BasicDriver {
     }
 
     implicit class OneToManyEntSave[KB, B, TB <: simple.EntityTable[KB, B]](
-      oneToMany: OneToMany[TB#Ent, TB#KEnt, TB]
-    )(
-      implicit csl: CanSetLookup[KB, B] = null
-    ) {
+      oneToMany: OneToMany[TB#Ent, TB#KEnt, TB])(
+        implicit csl: CanSetLookup[KB, B] = null) {
       val setEntityLookup = Option(csl)
 
       import simple._
@@ -108,12 +104,12 @@ trait KeyedTableComponent extends BasicDriver {
       def saved(implicit session: Session): OneToMany[TB#Ent, TB#KEnt, TB] = {
         initialItems filterNot isRemoved map (_.value) foreach {
           case e: KeyedEntity[KB, B] => otherTable.delete(e)
-          case _ =>
+          case _                     =>
         }
         val items = currentItems map { h =>
           val saved = h.value match {
             case e: SavedEntity[KB, B] => e
-            case e => otherTable save e
+            case e                     => otherTable save e
           }
           setEntityLookup map (_(saved)) getOrElse saved
         }
@@ -124,18 +120,14 @@ trait KeyedTableComponent extends BasicDriver {
     }
 
     def OneToMany[B, TB <: simple.Table[B]](
-      otherTable: TB with simple.Table[B], lookup: Option[Lookup]
-    )(
-      column: TB => Column[Lookup], setLookup: Lookup => B => B, initial: Seq[B] = null
-    ) = new OneToMany[B, B, TB](otherTable, lookup)(column, setLookup) {
+      otherTable: TB with simple.Table[B], lookup: Option[Lookup])(
+        column: TB => Column[Lookup], setLookup: Lookup => B => B, initial: Seq[B] = null) = new OneToMany[B, B, TB](otherTable, lookup)(column, setLookup) {
       cached = Option(initial)
     }
 
     def OneToManyEnt[KB, B, TB <: simple.EntityTable[KB, B]](
-      otherTable: TB with simple.EntityTable[KB, B], lookup: Option[Lookup]
-    )(
-      column: TB => Column[Lookup], setLookup: Lookup => B => B, initial: Seq[TB#Ent] = null
-    ) = new OneToMany[TB#Ent, TB#KEnt, TB](otherTable, lookup)(column, l => _.map(setLookup(l))) {
+      otherTable: TB with simple.EntityTable[KB, B], lookup: Option[Lookup])(
+        column: TB => Column[Lookup], setLookup: Lookup => B => B, initial: Seq[TB#Ent] = null) = new OneToMany[TB#Ent, TB#KEnt, TB](otherTable, lookup)(column, l => _.map(setLookup(l))) {
       cached = Option(initial)
     }
 
@@ -166,7 +158,7 @@ trait KeyedTableComponent extends BasicDriver {
             { case ke: KEnt => Some((ke.key, ke.value)) }
           )
         )
-      implicit def fromProjection3[T1,T2,T3](p: Projection3[T1,T2,T3])(implicit ev: A =:= (T1, T2, T3)) =
+      implicit def fromProjection3[T1, T2, T3](p: Projection3[T1, T2, T3])(implicit ev: A =:= (T1, T2, T3)) =
         p <-> (_ => Function.untupled(x => x.asInstanceOf[A]), x => Some(x))
     }
 
@@ -208,6 +200,21 @@ trait KeyedTableComponent extends BasicDriver {
       def <->(ap: Option[K] => Ap, unap: Unap): Mapping
       def <->(ap: Ap, unap: Unap): Mapping = <->(_ => ap, unap)
     }
+    /*    implicit class EntityMapping0(u: Unit) extends EntityMapping[A, Unit] {
+      def <->(ap: Option[K] => _ap, unap: _Unap) = Mapping(
+        ???,
+        ???
+      )
+    }
+    implicit class EntityMapping1[T1](val c: Column[T1]) extends EntityMapping[T1 => A, A => Option[T1]] {
+      def <->(ap: Option[K] => _Ap, unap: _Unap) = Mapping(
+        ???,
+        key ~ c <> (
+          (t: (K, T1)) => SavedEntity(t._1, ap(Some(t._1))(t._2)),
+          { ke: KEnt => unap(ke.value) map (t => (ke.key, t)) }
+        )
+      )
+    }*/
     implicit class EntityMapping2[T1, T2](val p: Projection2[T1, T2]) extends EntityMapping[(T1, T2) => A, A => Option[(T1, T2)]] {
       def <->(ap: Option[K] => _Ap, unap: _Unap) = Mapping(
         p <> (ap(None), unap),
@@ -265,7 +272,7 @@ trait KeyedTableComponent extends BasicDriver {
 trait NamingDriver extends KeyedTableComponent {
   abstract class KeyedTable[K, A](tableName: String)(implicit btm: BaseTypeMapper[K]) extends super.KeyedTable[K, A](tableName) {
     def this()(implicit btm: BaseTypeMapper[K]) =
-     this(currentMirror.classSymbol(Class.forName(Thread.currentThread.getStackTrace()(2).getClassName)).name.decoded)(btm)
+      this(currentMirror.classSymbol(Class.forName(Thread.currentThread.getStackTrace()(2).getClassName)).name.decoded)(btm)
 
     def column[C](options: ColumnOption[C]*)(implicit tm: TypeMapper[C]): Column[C] =
       column[C](scala.reflect.NameTransformer.decode(Thread.currentThread.getStackTrace()(2).getMethodName), options: _*)
