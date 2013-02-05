@@ -58,6 +58,8 @@ trait KeyedTableComponent extends BasicDriver {
         Query(KeyedTable.this).filter(_.key is key)
       }
       def compute(implicit session: simple.Session): Option[A] = query.firstOption
+
+      override def toString = s"${KeyedTable.this.getClass.getSimpleName}.Lookup($key)"
     }
 
     class OneToMany[E >: B, B, TB <: simple.Table[B]](
@@ -113,6 +115,7 @@ trait KeyedTableComponent extends BasicDriver {
 
       def compute(implicit session: Session): Seq[E] = query.list
 
+      override def toString = s"${KeyedTable.this.getClass.getSimpleName}.OneToMany(${cached map (_.toString) getOrElse currentItems})"
     }
 
     def OneToMany[B, TB <: simple.Table[B]](

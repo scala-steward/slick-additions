@@ -43,6 +43,8 @@ abstract class Lookup[A, Param] {
     cached = ret
     ret.get
   }
+
+  override def toString = s"Lookup(${cached map (_.toString) getOrElse "?"})"
 }
 
 object IdGenerator {
