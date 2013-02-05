@@ -43,10 +43,6 @@ case class ModifiedEntity[K, +A](key: K, value: A) extends KeyedEntity[K, A] {
 }
 
 trait KeyedTableComponent extends BasicDriver {
-  trait CanSetLookup[K, A] {
-    def apply[E <: KeyedEntity[K, A]](e: E): E
-  }
-
   abstract class KeyedTableBase[K: BaseTypeMapper, A](tableName: String) extends Table[A](tableName) { keyedTable =>
     def keyColumnName = "id"
     def keyColumnOptions = List(O.PrimaryKey, O.NotNull, O.AutoInc)
@@ -81,15 +77,32 @@ trait KeyedTableComponent extends BasicDriver {
         override val isCopy = true
       }
 
-      def withLookup(lookup: Lookup) = if(isCopy) this map setLookup(lookup) else {
+      def withLookup(lookup: Lookup): OneToMany[E, B, TB] = if(isCopy) this map setLookup(lookup) else {
         val f = setLookup(lookup)
         new OneToMany[E, B, TB](otherTable, Some(lookup))(column, setLookup) {
           cached = OneToMany.this.cached
-          override def currentItems = super.currentItems map (_ map f)
+          override def currentItems = OneToMany.this.currentItems map (_ map f)
         }
       }
 
       import simple._
+
+      def saved[KB, EB, TB2 <: simple.EntityTable[KB, EB]](implicit session: Session, ev: this.type <:< OneToMany[TB2#Ent, TB2#KEnt, TB2]): OneToManyEnt[KB, EB, TB2] = {
+        val self: OneToMany[TB2#Ent, TB2#KEnt, TB2] = ev(this)
+        val toDelete = initialItems filterNot isRemoved map (_.value) collect {
+          case e: KeyedEntity[KB, EB] => e
+        }
+        val items = currentItems map { h =>
+          h.value match {
+            case e: SavedEntity[KB, EB] => e
+            case e: Entity[KB, EB]      => self.otherTable save e
+          }
+        }
+        toDelete foreach self.otherTable.delete
+        new OneToManyEnt[KB, EB, TB2](self.otherTable, thisLookup)(self.column, self.setLookup) {
+          cached = Some(items)
+        }
+      }
 
       def query: Query[TB, B] =
         Query(KeyedTable.this)
@@ -99,34 +112,7 @@ trait KeyedTableComponent extends BasicDriver {
           }
 
       def compute(implicit session: Session): Seq[E] = query.list
-    }
 
-    implicit class OneToManyEntSave[KB, B, TB <: simple.EntityTable[KB, B]](
-      oneToMany: OneToMany[TB#Ent, TB#KEnt, TB]
-    )(
-      implicit csl: CanSetLookup[KB, B] = null
-    ) {
-      val setEntityLookup = Option(csl)
-
-      import simple._
-      import oneToMany._
-
-      def saved(implicit session: Session): OneToMany[TB#Ent, TB#KEnt, TB] = {
-        initialItems filterNot isRemoved map (_.value) foreach {
-          case e: KeyedEntity[KB, B] => otherTable.delete(e)
-          case _ =>
-        }
-        val items = currentItems map { h =>
-          val saved = h.value match {
-            case e: SavedEntity[KB, B] => e
-            case e => otherTable save e
-          }
-          setEntityLookup map (_(saved)) getOrElse saved
-        }
-        new OneToMany[TB#Ent, TB#KEnt, TB](otherTable, thisLookup)(oneToMany.column, setLookup) {
-          cached = Some(items)
-        }
-      }
     }
 
     def OneToMany[B, TB <: simple.Table[B]](
@@ -161,7 +147,6 @@ trait KeyedTableComponent extends BasicDriver {
   }
 
   abstract class EntityTable[K: BaseTypeMapper, A](tableName: String) extends KeyedTable[K, KeyedEntity[K, A]](tableName) with EntityTableBase[K, A] {
-
     case class Mapping(forInsert: ColumnBase[A], * : ColumnBase[KEnt])
     object Mapping {
       implicit def fromColumn(c: Column[A]) =
@@ -182,13 +167,44 @@ trait KeyedTableComponent extends BasicDriver {
 
     def * = mapping.*
 
+    trait LookupLens[L] {
+      def get: A => L
+      def set: L => A => A
+      def apply(a: A, f: L => L): A
+      def saved(implicit session: simple.Session): L => L
+      def setLookup: K => L => L
+      def setLookupAndSave(key: K, a: A)(implicit session: simple.Session) = apply(a, setLookup(key) andThen saved)
+    }
+
+  //    type OneToManyEnt[KB, B, TB <: simple.EntityTable[KB, B]] = OneToMany[TB#Ent, TB#KEnt, TB]
+
+    case class OneToManyLens[KB, B, TB <: simple.EntityTable[KB, B]](get: A => OneToManyEnt[KB, B, TB])(val set: OneToManyEnt[KB, B, TB] => A => A) extends LookupLens[OneToManyEnt[KB, B, TB]] {
+      def apply(a: A, f: OneToManyEnt[KB, B, TB] => OneToManyEnt[KB, B, TB]) = {
+        set(f(get(a)))(a)
+      }
+      val setLookup = { key: K => o2m: OneToManyEnt[KB, B, TB] => o2m withLookup Lookup(key) }
+      def saved(implicit session: simple.Session) = { otm: OneToManyEnt[KB, B, TB] => otm.saved }
+    }
+
+    def lookupLenses: Seq[LookupLens[_]] = Nil
+
+    private def updateAndSaveLookupLenses(key: K, a: A)(implicit session: simple.Session) =
+      lookupLenses.foldRight(a){ (clu, v) =>
+        clu.setLookupAndSave(key, v)
+      }
+
     def insert(v: A)(implicit session: simple.Session): SavedEntity[K, A] = insert(Ent(v))
+
     def insert(e: Entity[K, A])(implicit session: simple.Session): SavedEntity[K, A] = {
       import simple._
-      e match {
-        case ke: KEnt => SavedEntity(* returning key insert ke, ke.value)
-        case ke: Ent  => SavedEntity(forInsert returning key insert ke.value, ke.value)
+      // Insert it and get the new or old key
+      val k2 = e match {
+        case ke: KEnt => * returning key insert ke
+        case ke: Ent  => forInsert returning key insert ke.value
       }
+      // Apply the key to all child lookups (e.g., OneToMany)
+      val v2 = updateAndSaveLookupLenses(k2, e.value)
+      SavedEntity(k2, v2)
     }
     def update(ke: KEnt)(implicit session: simple.Session): SavedEntity[K, A] = {
       import simple._
@@ -201,7 +217,6 @@ trait KeyedTableComponent extends BasicDriver {
         case ke: Ent  => insert(ke)
       }
     }
-
     def delete(ke: KEnt)(implicit session: simple.Session) = {
       import simple._
       Query(this).filter(_.key is ke.key).delete
