@@ -15,7 +15,7 @@ sealed trait Entity[K, +A] {
 
   def duplicate = new KeylessEntity[K, A](value)
 }
-class KeylessEntity[K, +A](val value: A) extends Entity[K, A] {
+case class KeylessEntity[K, +A](val value: A) extends Entity[K, A] {
   final def isSaved = false
 
   override def equals(that: Any) = this eq that.asInstanceOf[AnyRef]
@@ -28,6 +28,12 @@ sealed trait KeyedEntity[K, +A] extends Entity[K, A] {
   def key: K
 
   def map[B >: A](f: A => B): ModifiedEntity[K, B] = ModifiedEntity[K, B](key, f(value))
+}
+object KeyedEntity {
+  def unapply[K, A](e: Entity[K, A]): Option[(K, A)] = e match {
+    case ke: KeyedEntity[K, A] => Some((ke.key, ke.value))
+    case _                     => None
+  }
 }
 case class SavedEntity[K, +A](key: K, value: A) extends KeyedEntity[K, A] {
   final def isSaved = true
