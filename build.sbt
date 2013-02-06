@@ -6,7 +6,7 @@ name := "slick-additions"
 
 organization := "nafg"
 
-version := "0.1.7"
+version := "0.1.8"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.0.M6-SNAP5" % "test"
 
