@@ -83,7 +83,7 @@ trait KeyedTableComponent extends BasicDriver {
         case _ => false
       }
 
-      protected def copy(items: Seq[Handle[E]]) = new OneToMany[E, B, TB](otherTable, thisLookup)(column, setLookup) {
+      def copy(items: Seq[Handle[E]]) = new OneToMany[E, B, TB](otherTable, thisLookup)(column, setLookup) {
         override val initialItems = OneToMany.this.initialItems
         override val currentItems = items
         override def apply()(implicit session: simple.Session) = currentItems map (_.value)
@@ -221,7 +221,7 @@ trait KeyedTableComponent extends BasicDriver {
     def update(ke: KEnt)(implicit session: simple.Session): SavedEntity[K, A] = {
       import simple._
       Query(this).where(_.key is ke.key).map(_.forInsert) update ke.value
-      SavedEntity(ke.key, ke.value)
+      SavedEntity(ke.key, updateAndSaveLookupLenses(ke.key, ke.value))
     }
     def save(e: Entity[K, A])(implicit session: simple.Session): SavedEntity[K, A] = {
       e match {

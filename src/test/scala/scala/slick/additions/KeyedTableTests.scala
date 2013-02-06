@@ -68,6 +68,18 @@ class KeyedTableTests extends FunSuite with ShouldMatchers with BeforeAndAfter {
 
   test("OneToMany") {
     db.withSession { implicit session: Session =>
+      def testRoundTrip(in: People.Ent) = {
+        val saved = People save in
+        People.find(_ where (_._1.key is saved.key)) match {
+          case loaded :: Nil =>
+            println(s"Loaded $loaded")
+            saved should equal (loaded)
+            saved.value.phones() should equal (loaded.value.phones())
+            saved
+          case x => fail(s"Found $x")
+        }
+      }
+
       val person = People.Ent(
         Person(
           "First",
@@ -81,18 +93,21 @@ class KeyedTableTests extends FunSuite with ShouldMatchers with BeforeAndAfter {
           )
         )
       )
-      val saved = People.save(person)
+      val saved = testRoundTrip(person)
 
-      val loaded = People.find(identity)
-      loaded should equal (List(saved))
-
-      val justFields = loaded.toSet.map { p: People.Ent => (p.value.first, p.value.last, p.value.phones().toSet map { n: Phones.Ent => (n.value.kind, n.value.number)}) }
-      justFields should equal (Set(
-        ("First", "Last", Set(
-          ("home", "1234567890"),
-          ("cell", "0987654321")
-        ))
-      ))
+      // Delete one phone, modify the other, and add another
+      val withAnotherPhone = saved.map(p =>
+        p.copy(
+          phones = p.phones.copy(
+            p.phones.currentItems.collect {
+              case h if h.value.value.kind == "cell" =>
+                h.map(_.map(_.copy(kind = "mobile")))
+            }
+          ) + Phones.Ent(Phone("work", "5555555555"))
+        )
+      )
+      println("withAnotherPhone: " + withAnotherPhone)
+      testRoundTrip(withAnotherPhone)
     }
   }
 }
