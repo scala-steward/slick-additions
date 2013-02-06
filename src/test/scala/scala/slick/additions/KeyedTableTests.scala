@@ -81,12 +81,12 @@ class KeyedTableTests extends FunSuite with ShouldMatchers with BeforeAndAfter {
           )
         )
       )
-      People.save(person)
+      val saved = People.save(person)
 
-      val people = People.find(identity)
+      val loaded = People.find(identity)
+      loaded should equal (List(saved))
 
-      val justFields = people.toSet.map { p: People.Ent => (p.value.first, p.value.last, p.value.phones().toSet map { n: Phones.Ent => (n.value.kind, n.value.number)}) }
-
+      val justFields = loaded.toSet.map { p: People.Ent => (p.value.first, p.value.last, p.value.phones().toSet map { n: Phones.Ent => (n.value.kind, n.value.number)}) }
       justFields should equal (Set(
         ("First", "Last", Set(
           ("home", "1234567890"),

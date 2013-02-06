@@ -72,6 +72,17 @@ trait KeyedTableComponent extends BasicDriver {
 
       protected val isCopy = false
 
+      private def thisTable = KeyedTable.this
+
+      // TODO should we compare the elements somehow? Maybe only compare if they're both populated?
+      override def equals(o: Any) = o match {
+        case that: OneToMany[E, B, TB] =>
+            this.thisTable == that.thisTable &&
+            this.otherTable == that.otherTable &&
+            scala.slick.ast.Node(this.column(this.otherTable)) == scala.slick.ast.Node(that.column(that.otherTable))
+        case _ => false
+      }
+
       protected def copy(items: Seq[Handle[E]]) = new OneToMany[E, B, TB](otherTable, thisLookup)(column, setLookup) {
         override val initialItems = OneToMany.this.initialItems
         override val currentItems = items
@@ -178,8 +189,6 @@ trait KeyedTableComponent extends BasicDriver {
       def setLookup: K => L => L
       def setLookupAndSave(key: K, a: A)(implicit session: simple.Session) = apply(a, setLookup(key) andThen saved)
     }
-
-  //    type OneToManyEnt[KB, B, TB <: simple.EntityTable[KB, B]] = OneToMany[TB#Ent, TB#KEnt, TB]
 
     case class OneToManyLens[KB, B, TB <: simple.EntityTable[KB, B]](get: A => OneToManyEnt[KB, B, TB])(val set: OneToManyEnt[KB, B, TB] => A => A) extends LookupLens[OneToManyEnt[KB, B, TB]] {
       def apply(a: A, f: OneToManyEnt[KB, B, TB] => OneToManyEnt[KB, B, TB]) = {
