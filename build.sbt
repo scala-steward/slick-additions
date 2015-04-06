@@ -20,10 +20,18 @@ lazy val `slick-additions` =
     .settings(settings)
     .settings(
       libraryDependencies ++= Seq(
-        "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+        "org.scala-lang" % "scala-reflect" % scalaVersion.value % "provided",
         "com.typesafe.slick" %% "slick" % "3.1.1",
         "org.scalatest" %% "scalatest" % "3.0.1" % "test",
         "com.h2database" % "h2" % "1.4.194" % "test",
         "ch.qos.logback" % "logback-classic" % "1.2.2" % "test"
-      )
+      ) ++
+        CrossVersion.partialVersion(scalaVersion.value) match {
+          case Some((2, 10)) =>
+            Seq("org.scalamacros" %% "quasiquotes" % "2.1.0-M5" cross CrossVersion.binary)
+          case _ =>
+            Nil
+        }
     )
+
+addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
